@@ -15,9 +15,17 @@ def main():
             strnum = str(num)
             l = len(strnum)
 
-            for sz in range(l - 1, 0, -1):
+            checked = set()
+            for sz in range(l // 2, 0, -1):
                 if l % sz != 0:
                     continue
+
+                for c in checked:
+                    if c % sz == 0:
+                        continue
+
+                checked.add(sz)
+
                 pieces = {
                     strnum[i:i+sz]
                     for i in range(0, l, sz)
