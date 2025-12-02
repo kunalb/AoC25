@@ -1,5 +1,5 @@
 import sys
-
+from concurrent.futures import ThreadPoolExecutor
 
 def solve_range(start, stop):
     sum = 0
@@ -44,14 +44,13 @@ def main():
         for r in inputs.split(",")
     ]
 
-    sum = 0
-    sum2 = 0
-    for r in ranges:
-        rsum, rsum2 = solve_range(*r)
-        sum += rsum
-        sum2 += rsum2
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        sums = list(executor.map(lambda x: solve_range(*x), ranges))
 
-    print(sum)
+    sum1 = sum(x[0] for x in sums)
+    sum2 = sum(x[1] for x in sums)
+
+    print(sum1)
     print(sum2)
 
 if __name__ == "__main__":
