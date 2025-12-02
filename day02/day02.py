@@ -26,12 +26,12 @@ def main():
 
                 checked.add(sz)
 
-                pieces = {
-                    strnum[i:i+sz]
-                    for i in range(0, l, sz)
-                }
-                if len(pieces) == 1:
-                    # print(num)
+                matched = True
+                for i in range(sz, l, sz):
+                    matched = strnum[i:i+sz] == strnum[0:sz]
+                    if not matched:
+                        break
+                if matched:
                     sum2 += num
                     break
 
