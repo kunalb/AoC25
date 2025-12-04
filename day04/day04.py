@@ -4,53 +4,46 @@ from collections import defaultdict
 
 
 def main():
-    grid = sys.stdin.read().strip()
-    grid = list(map(list, grid.split()))
+    grid = set()
+    lines = sys.stdin.readlines()
+    for r, row in enumerate(lines):
+        for c, col in enumerate(row.strip()):
+            if col == '@':
+                grid.add(r + c * 1j)
+    cols = c
+    rows = r
 
+    box = [
+        a + b * 1j
+        for a in range(-1, 2)
+        for b in range(-1, 2)
+        if not (a == 0 and b == 0)
+    ]
+
+    removed = 0
     total_removed = 0
-    while (removed := solve(grid)):
-        print(removed)
+    first = True
+
+    while removed or first:
+        removed = 0
+        counts = defaultdict(lambda: 0)
+        next_grid = set()
+        for pt in grid:
+            count = sum(1 if (pt + b) in grid else 0 for b in box)
+            if count < 4:
+                removed += 1
+            else:
+                next_grid.add(pt)
+
+        if first:
+            first = False
+            print(removed)
+
         total_removed += removed
+        grid = next_grid
 
     print(total_removed)
 
 
-def solve(grid):
-
-    counts = 0
-    count_grid = []
-    for _ in range(0, len(grid)):
-        count_grid.append([0] * len(grid[0]))
-
-    for i in range(len(grid)):
-        for j in range(len(grid[i])):
-            if grid[i][j] != '@':
-                continue
-
-            for x in range (-1, 2):
-                for y in range(-1, 2):
-                    p = x + i
-                    q = y + j
-                    if p < 0 or q < 0:
-                        continue
-
-                    if p >= len(grid) or q >= len(grid[i]):
-                        continue
-
-                    if x == 0 and y == 0:
-                        continue
-
-                    count_grid[p][q] += 1
-
-    total = 0
-    for i, row in enumerate(count_grid):
-        for j, col in enumerate(row):
-            if col < 4 and grid[i][j] == '@':
-                grid[i][j] = "."
-                total += 1
-
-    return total
-
-
 if __name__ == "__main__":
-    main()
+    main2()
