@@ -1,11 +1,29 @@
 import sys
 
 
-def search_range(ranges, x):
-    for range in ranges:
-        if x >= range[0] and x <= range[1]:
-            return True
-    return False
+def valid_ids(ids, ranges):
+    i = 0
+    j = 0
+
+    total_ids = 0
+    fresh_ids = 0
+
+    while True:
+        if j >= len(ids):
+            break
+
+        if i >= len(ranges):
+            break
+
+        if ids[j] > ranges[i][1]:
+            i += 1
+        elif ids[j] < ranges[i][0]:
+            j += 1
+        elif ids[j] >= ranges[i][0]:
+            fresh_ids += 1
+            j += 1
+
+    return fresh_ids
 
 
 def dedup(ranges):
@@ -23,6 +41,7 @@ def dedup(ranges):
 
     return fixed
 
+
 def main():
     fresh, ids = sys.stdin.read().split("\n\n")
     ranges = [
@@ -30,12 +49,13 @@ def main():
         for row in fresh.strip().split()
     ]
     ids = list(map(int, ids.strip().split()))
+    ids.sort()
+    ranges.sort()
+    ranges = dedup(ranges)
 
-    ranges.sort(key=lambda x: x[0])
-    result = sum(int(search_range(ranges, x)) for x in ids)
-    print(result)
+    print(valid_ids(ids, ranges))
+    print(sum(y[1] - y[0] + 1 for y in ranges))
 
-    deduped = dedup(ranges)
-    print(sum(y[1] - y[0] + 1 for y in deduped))
 
-main()
+if __name__ == "__main__":
+    main()
