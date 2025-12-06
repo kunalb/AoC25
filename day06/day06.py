@@ -1,8 +1,20 @@
+import string
 import sys
 
+from operator import mul
+from functools import reduce
 
-def main2():
-    inp = sys.stdin.read().strip('\n')
+
+def resolve(op, nums):
+    match op:
+        case '+':
+            return sum(nums)
+        case '*':
+            return reduce(mul, nums)
+    return 0
+
+
+def cephalopod_sum(inp):
     lines = inp.splitlines()
     cols = max(len(line) for line in lines)
 
@@ -13,17 +25,7 @@ def main2():
 
     for i in range(cols):
         if i < len(lines[-1]) and (lines[-1][i] == '*' or lines[-1][i] == '+'):
-            match cur_op:
-                case '+':
-                    res = 0
-                    for num in nums:
-                        res += num
-                    total += res
-                case '*':
-                    res = 1
-                    for num in nums:
-                        res *= num
-                    total += res
+            total += resolve(cur_op, nums)
             cur_op = lines[-1][i]
             nums = []
 
@@ -33,8 +35,7 @@ def main2():
             if i >= len(line):
                 continue
 
-            ch = line[i]
-            if ch >= '0' and ch <= '9':
+            if (ch := line[i]).isdigit():
                 cur = 10 * cur + int(ch)
                 found = True
 
@@ -43,25 +44,12 @@ def main2():
 
         nums.append(cur)
 
-    match cur_op:
-        case '+':
-            res = 0
-            for num in nums:
-                res += num
-            total += res
-        case '*':
-            res = 1
-            for num in nums:
-                res *= num
-            total += res
-
-    print(total)
+    total += resolve(cur_op, nums)
+    return total
 
 
-def main():
-    rows = sys.stdin.read().strip()
-    data = [row.split() for row in rows.splitlines()]
-
+def human_sum(inp):
+    data = [row.split() for row in inp.splitlines()]
     r = len(data)
     c = len(data[0])
 
@@ -70,18 +58,23 @@ def main():
         op = data[r - 1][y]
         match op:
             case '+':
-                res = sum(int(data[x][y]) for x in range(r -1))
-                total += res
+                total += sum(int(data[x][y]) for x in range(r -1))
             case '*':
-                res = 1
-                for x in range(r - 1):
-                    res *= int(data[x][y])
-                total += res
+                total += reduce(
+                    mul,
+                    (int(data[x][y]) for x in range(r -1))
+                )
             case _:
-                print(op)
                 1/0
 
-    print(total)
+    return total
+
+
+def main():
+    inp = sys.stdin.read().strip('\n')
+    print(human_sum(inp))
+    print(cephalopod_sum(inp))
+
 
 if __name__ == "__main__":
-    main2()
+    main()
