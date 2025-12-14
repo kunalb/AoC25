@@ -18,6 +18,8 @@ def pm(mat, title=""):
 
 
 def reduce_mat(matrix):
+    log = False
+
     # Only need to handle first n columns
     sq = len(matrix[0]) - 1
     for col in range(sq):
@@ -29,14 +31,14 @@ def reduce_mat(matrix):
                     matrix[col] = matrix[row]
                     matrix[row] = tmp
 
-                    pm(matrix, "reorder")
+                    log and pm(matrix, "reorder")
 
                 for c in range(len(matrix[col])):
                     matrix[col][c] *= mul
-                pm(matrix, "mul")
+                log and pm(matrix, "mul")
 
                 break
-        pm(matrix, f"{col} set1")
+        log and pm(matrix, f"{col} set1")
 
         for row in range(col + 1, len(matrix)):
             if matrix[row][col] != 0:
@@ -47,9 +49,11 @@ def reduce_mat(matrix):
                     else:
                         matrix[row][c] = matrix[row][c] - orig * matrix[col][c]
 
-        pm(matrix, "sub")
+        log and pm(matrix, "sub")
 
     zs = 0
+    # Revisit this: need to handle case properly
+    # For incomplete matrices
     for i, row in enumerate(matrix):
         nonzero = i < len(row) and row[i] != 0
         if not nonzero:
@@ -62,7 +66,92 @@ def reduce_mat(matrix):
 
         zs += 1
 
-    pm(matrix, "final reorder")
+    log and pm(matrix, "final reorder")
+
+
+def solve_val_constraints(vals, total_val, params=None):
+    dims = len(vals[0])
+    log = False
+    limits = [[0, None] for _ in range(dims - 1)]
+    checks = []
+
+    log and print("params", params, all(p is not None for p in params) if params else None)
+    if params is None:
+        params = [None] * (dims -1)
+
+    if all(p is not None for p in params):
+        for val in vals:
+            v = val[-1] + sum(a * b for (a, b) in zip(params, val))
+            print("val check", v, val)
+            assert v >= 0, f"val check failed {val}"
+
+        return total_val[-1] + sum(a * b for (a, b) in zip (params, total_val))
+
+    # Each value must be greater than 0
+    for val in vals:
+        unknowns = sum(1 for i, x in enumerate(val[:-1]) if x != 0 and params[i] is None)
+        if unknowns > 1: # 2 unknowns, manually confirm
+            checks.append(val)
+            continue
+
+        if unknowns == 0:
+            continue
+
+        for i, p in enumerate(val[:-1]):
+            if p == 0:
+                continue
+
+            limit = -Fraction(val[-1] + sum(q * v for (q, v) in zip(params, val) if q is not None), p)
+            if p > 0:
+                if limits[i][0] < limit:
+                    limits[i][0] = limit
+            elif p < 0:
+                if limits[i][1] is None or limits[i][1] > limit:
+                    limits[i][1] = limit
+
+    for limit in limits:
+        if limit[1] is not None and limit[0] > limit[1]:
+            assert False, "Impossible limits found"
+
+    log and print("limits", limits)
+    explore = min(
+        filter(lambda x: params[x[0]] is None, enumerate(limits)),
+        key=lambda x: (x[1][1] or math.inf) - x[1][0]
+    )
+
+    if total_val[explore[0]] >= 0:
+        guess = explore[1][0]
+        while explore[1][1] is None or guess <= explore[1][1]:
+            params[explore[0]] = guess
+            try:
+                return solve_val_constraints(vals, total_val, params)
+            except Exception as e:
+                log and print(e)
+            guess += 1
+    else:
+        guess = explore[1][1]
+        while guess >= explore[1][0]:
+            params[explore[0]] = guess
+            try:
+                return solve_val_constraints(vals, total_val, params)
+            except Exception as e:
+                log and print(e)
+            guess -= 1
+
+    assert False, "No guess worked"
+
+
+def val_constraints(vals):
+    log = False
+
+    dims = len(vals[0])
+    log and pm(vals, "vals")
+    total_val = [0] * dims
+    for d in range(dims):
+        total_val[d] = sum(v[d] for v in vals)
+    log and print("total", total_val)
+
+    return solve_val_constraints(vals, total_val)
 
 
 def matrix_solve(machine):
@@ -78,6 +167,7 @@ def matrix_solve(machine):
 
     pm(matrix, "start")
     reduce_mat(matrix)
+    pm(matrix, "reduced")
 
     constraints = sum(any(x != 0 for x in row) for row in matrix)
     variables = len(combos)
@@ -85,50 +175,46 @@ def matrix_solve(machine):
     assert variables >= constraints
 
     if variables == constraints:
-        vars = [0] * variables
+        vals = [0] * variables
         for k in range(variables - 1, -1, -1):
-            vars[k] = matrix[k][-1]
+            vals[k] = matrix[k][-1]
             for l in range(k + 1, variables):
-                vars[k] -= matrix[k][l] * vars[l]
+                vals[k] -= matrix[k][l] * vals[l]
 
         print("exact")
-        print(",".join(map(str, vars)))
-        print(sum(vars))
+        print(",".join(map(str, vals)))
+        print(sum(vals))
 
-        return sum(vars)
-    else:
-        dims = (variables - constraints + 1)
-        vars = [[0] * dims  for _ in range(variables)]
+        return sum(vals)
 
-        param_idx = 0
-        row = 0
-        for i in range(variables):
-            if row < constraints and matrix[row][i] != 0:
-                row += 1
-            else:
-                vars[i][param_idx] = 1
-                param_idx += 1
-        assert param_idx == dims - 1
+    dims = (variables - constraints + 1)
+    vals = [[0] * dims  for _ in range(variables)]
 
-        for k in range(constraints - 1, -1, -1):
-            col = 0
-            while matrix[k][col] == 0:
-                col += 1
+    param_idx = 0
+    row = 0
+    for i in range(variables):
+        if row < constraints and matrix[row][i] != 0:
+            row += 1
+        else:
+            vals[i][param_idx] = 1
+            param_idx += 1
+    assert param_idx == dims - 1
 
-            vars[col][-1] = matrix[k][-1]
-            for l in range(col + 1, variables):
-                for m in range(dims):
-                     vars[col][m] -= matrix[k][l] * vars[l][m]
+    for k in range(constraints - 1, -1, -1):
+        col = 0
+        while matrix[k][col] == 0:
+            col += 1
 
-        pm(vars, "vars")
-        total_val = [0] * dims
+        vals[col][-1] = matrix[k][-1]
+        for l in range(col + 1, variables):
+            for m in range(dims):
+                 vals[col][m] -= matrix[k][l] * vals[l][m]
 
-        for d in range(dims):
-            total_val[d] = sum(v[d] for v in vars)
+    result = val_constraints(vals)
+    print("result: ", result)
+    print()
 
-        print("total", total_val)
-
-        return 0
+    return result
 
 ###
 
