@@ -1,4 +1,5 @@
 import sys
+import time
 import math
 import itertools
 from collections import deque
@@ -14,7 +15,7 @@ def pm(mat, title=""):
         print(title)
     for row in mat:
         print(" ".join(map(lambda x: f"{x}", row)))
-    print()
+    print(flush=True)
 
 
 def reduce_matrix(mat):
@@ -67,7 +68,7 @@ def reduce_matrix(mat):
 
 def solve_val_constraints(vals, total_val, params=None):
     dims = len(vals[0])
-    log = False
+    log = True
     limits = [[0, None] for _ in range(dims - 1)]
     checks = []
 
@@ -117,7 +118,7 @@ def solve_val_constraints(vals, total_val, params=None):
 
     if total_val[explore[0]] >= 0:
         guess = explore[1][0]
-        while explore[1][1] is None or guess <= explore[1][1]:
+        while explore[1][1] is None or guess <= explore[1][1] and guess <= 100:
             params[explore[0]] = guess
             try:
                 return solve_val_constraints(vals, total_val, params)
@@ -138,7 +139,7 @@ def solve_val_constraints(vals, total_val, params=None):
 
 
 def val_constraints(vals):
-    log = False
+    log = True
 
     dims = len(vals[0])
     log and pm(vals, "vals")
@@ -151,8 +152,12 @@ def val_constraints(vals):
 
 
 def matrix_solve(machine):
+    log = True
+    start_time_s = time.time()
+
     idx, (joltage, combos) = machine
-    print(machine)
+    log and print(machine)
+    print(f"START {idx}", flush=True)
 
     matrix = [[] for _ in joltage]
 
@@ -161,13 +166,13 @@ def matrix_solve(machine):
             matrix[i].append(combo[i] if i < len(combo) else 0)
         matrix[i].append(joltage[i])
 
-    pm(matrix, "start")
+    log and pm(matrix, "start")
     reduce_matrix(matrix)
-    pm(matrix, "reduced")
+    log and pm(matrix, "reduced")
 
     constraints = sum(any(x != 0 for x in row) for row in matrix)
     variables = len(combos)
-    print(f"{variables=} {constraints=}")
+    log and print(f"{variables=} {constraints=}", flush=True)
     assert variables >= constraints
 
     if variables == constraints:
@@ -177,9 +182,9 @@ def matrix_solve(machine):
             for l in range(k + 1, variables):
                 vals[k] -= matrix[k][l] * vals[l]
 
-        print("exact")
-        print(",".join(map(str, vals)))
-        print(sum(vals))
+        log and print("exact")
+        log and print(",".join(map(str, vals)))
+        log and print(sum(vals))
 
         return sum(vals)
 
@@ -207,9 +212,11 @@ def matrix_solve(machine):
                  vals[col][m] -= matrix[k][l] * vals[l][m]
 
     result = val_constraints(vals)
-    print("result: ", result)
-    print()
+    log and print("result: ", result)
+    log and print()
 
+    dur_s = time.time() - start_time_s
+    print(f"DONE {idx} ({dur_s})", flush=True)
     return result
 
 ###
