@@ -17,56 +17,52 @@ def pm(mat, title=""):
     print()
 
 
-def reduce_mat(matrix):
+def reduce_matrix(mat):
     log = False
 
-    # Only need to handle first n columns
-    sq = len(matrix[0]) - 1
-    for col in range(sq):
-        for row in range(col, len(matrix)):
-            if matrix[row][col] != 0:
-                mul = Fraction(1, matrix[row][col])
-                if row != col:
-                    tmp = matrix[col]
-                    matrix[col] = matrix[row]
-                    matrix[row] = tmp
+    n = min(len(mat), len(mat[0]))
 
-                    log and pm(matrix, "reorder")
+    cur_row = 0
+    for col in range(n):
+        # Swap in first non-zero row
+        found1 = False
+        for r in range(cur_row, len(mat)):
+            if mat[r][col] == 0:
+                continue
 
-                for c in range(len(matrix[col])):
-                    matrix[col][c] *= mul
-                log and pm(matrix, "mul")
-
+            found1 = True
+            if r == cur_row:
                 break
-        log and pm(matrix, f"{col} set1")
 
-        for row in range(col + 1, len(matrix)):
-            if matrix[row][col] != 0:
-                orig = matrix[row][col] / matrix[col][col]
-                for c in range(len(matrix[row])):
-                    if c == col:
-                        matrix[row][col] = 0
-                    else:
-                        matrix[row][c] = matrix[row][c] - orig * matrix[col][c]
+            tmp = mat[r]
+            mat[r] = mat[cur_row]
+            mat[cur_row] = tmp
 
-        log and pm(matrix, "sub")
+            log and pm(mat, f"{cur_row=} {col=} swapped")
+            break
 
-    zs = 0
-    # Revisit this: need to handle case properly
-    # For incomplete matrices
-    for i, row in enumerate(matrix):
-        nonzero = i < len(row) and row[i] != 0
-        if not nonzero:
+        if not found1:
             continue
 
-        if zs < i:
-            tmp = row
-            matrix[i] = matrix[zs]
-            matrix[zs] = row
+        # Make the value 1
+        if mat[cur_row][col] != 1:
+            ratio = Fraction(1, mat[cur_row][col])
+            for c in range(col, len(mat[cur_row])):
+                mat[cur_row][c] *= ratio
+            log and pm(mat, f"{cur_row=} {col=} normalized")
 
-        zs += 1
+        # Reduce all other rows
+        zeroed = False
+        for row in mat[cur_row +1:]:
+            if row[col] == 0:
+                continue
+            zeroed = True
+            for c in range(len(row) - 1, col - 1, -1):
+                row[c] -= mat[cur_row][c] * Fraction(row[col], mat[cur_row][col])
+        if zeroed:
+            log and pm(mat, f"{cur_row=} {col=} zero'd out rest")
 
-    log and pm(matrix, "final reorder")
+        cur_row += 1
 
 
 def solve_val_constraints(vals, total_val, params=None):
@@ -82,7 +78,7 @@ def solve_val_constraints(vals, total_val, params=None):
     if all(p is not None for p in params):
         for val in vals:
             v = val[-1] + sum(a * b for (a, b) in zip(params, val))
-            print("val check", v, val)
+            log and print("val check", v, val)
             assert v >= 0, f"val check failed {val}"
 
         return total_val[-1] + sum(a * b for (a, b) in zip (params, total_val))
@@ -166,7 +162,7 @@ def matrix_solve(machine):
         matrix[i].append(joltage[i])
 
     pm(matrix, "start")
-    reduce_mat(matrix)
+    reduce_matrix(matrix)
     pm(matrix, "reduced")
 
     constraints = sum(any(x != 0 for x in row) for row in matrix)
