@@ -1,6 +1,7 @@
 import sys
 import time
 import math
+import numbers
 import itertools
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -24,7 +25,13 @@ def reduce_matrix(mat):
     n = min(len(mat), len(mat[0]))
 
     cur_row = 0
-    for col in range(n):
+    # for col in range(n):
+    col = -1
+    while cur_row < len(mat):
+        col += 1
+        if col >= len(mat[0]):
+            break
+
         # Swap in first non-zero row
         found1 = False
         for r in range(cur_row, len(mat)):
@@ -66,10 +73,64 @@ def reduce_matrix(mat):
         cur_row += 1
 
 
+def reduce_limits(vals, params):
+    log = True
+
+    limit_updated = True
+    limits = [
+        [0, math.inf] if p is None else [p, p]
+        for p in params
+    ]
+
+    while limit_updated:
+        limit_updated = False
+
+        for val in vals:
+            log and print("val:", val)
+
+            for i, p in enumerate(params):
+                log and print(f"param {i}: {p} | {val[i]}")
+                if p is not None or val[i] == 0:
+                    continue
+
+                gtsum = [-val[-1], -val[-1]]
+                for j, q in enumerate(params):
+                    if j == i or val[j] == 0:
+                        continue
+
+                    if q is not None:
+                        gtsum = [g - q * val[j] for g in gtsum]
+                    else:
+                        pl = sorted([val[j] * limits[j][k] for k in range(2)])
+                        gtsum = [g - m for (g, m) in zip(gtsum, pl)]
+
+                gtsum = sorted([g / val[i] for g in gtsum])
+                if val[i] > 0:
+                    if limits[i][0] < gtsum[0]:
+                        limits[i][0] = gtsum[0]
+                        limit_updated = True
+                else:
+                    if limits[i][1] > gtsum[1]:
+                        limits[i][1] = gtsum[1]
+                        limit_updated = True
+
+                log and print("limits", limits)
+
+        all_set = True
+        for limit in limits:
+            if any(l is None for l in limit):
+                all_set = False
+                break
+        if all_set:
+            break
+
+    log and print("final limits", limits)
+    return limits
+
+
 def solve_val_constraints(vals, total_val, params=None):
     dims = len(vals[0])
     log = True
-    limits = [[0, None] for _ in range(dims - 1)]
     checks = []
 
     log and print("params", params, all(p is not None for p in params) if params else None)
@@ -77,34 +138,19 @@ def solve_val_constraints(vals, total_val, params=None):
         params = [None] * (dims -1)
 
     if all(p is not None for p in params):
+        lcm = 1
         for val in vals:
             v = val[-1] + sum(a * b for (a, b) in zip(params, val))
             log and print("val check", v, val)
             assert v >= 0, f"val check failed {val}"
 
-        return total_val[-1] + sum(a * b for (a, b) in zip (params, total_val))
+        # 2025-12-17 Added an assert here
+        total = (total_val[-1] + sum(a * b for (a, b) in zip (params, total_val)))
+        assert Fraction(total).denominator == 1, "need an integer total"
+        return total
 
-    # Each value must be greater than 0
-    for val in vals:
-        unknowns = sum(1 for i, x in enumerate(val[:-1]) if x != 0 and params[i] is None)
-        if unknowns > 1: # 2 unknowns, manually confirm
-            checks.append(val)
-            continue
-
-        if unknowns == 0:
-            continue
-
-        for i, p in enumerate(val[:-1]):
-            if p == 0:
-                continue
-
-            limit = -Fraction(val[-1] + sum(q * v for (q, v) in zip(params, val) if q is not None), p)
-            if p > 0:
-                if limits[i][0] < limit:
-                    limits[i][0] = limit
-            elif p < 0:
-                if limits[i][1] is None or limits[i][1] > limit:
-                    limits[i][1] = limit
+    # Repeatedly check limits and update bounds
+    limits = reduce_limits(vals, params)
 
     for limit in limits:
         if limit[1] is not None and limit[0] > limit[1]:
@@ -116,15 +162,19 @@ def solve_val_constraints(vals, total_val, params=None):
         key=lambda x: (x[1][1] or math.inf) - x[1][0]
     )
 
+    increment = Fraction(1, math.lcm(*[Fraction(g).denominator for g in explore[1]]))
+    print("increment", increment)
+
     if total_val[explore[0]] >= 0:
         guess = explore[1][0]
-        while explore[1][1] is None or guess <= explore[1][1] and guess <= 100:
+
+        while explore[1][1] is None or guess <= explore[1][1]:
             params[explore[0]] = guess
             try:
                 return solve_val_constraints(vals, total_val, params)
             except Exception as e:
                 log and print(e)
-            guess += 1
+            guess += increment
     else:
         guess = explore[1][1]
         while guess >= explore[1][0]:
@@ -133,7 +183,7 @@ def solve_val_constraints(vals, total_val, params=None):
                 return solve_val_constraints(vals, total_val, params)
             except Exception as e:
                 log and print(e)
-            guess -= 1
+            guess -= increment
 
     assert False, "No guess worked"
 
@@ -211,7 +261,30 @@ def matrix_solve(machine):
             for m in range(dims):
                  vals[col][m] -= matrix[k][l] * vals[l][m]
 
+    # TODO: Introduce constraint that values must be an integer and express that correctly
+    # 1) Find LCM of all the constant values and multiply throughout
+    # lcm = math.lcm(*[
+    #    Fraction(val[-1]).denominator
+    #    for val in vals
+    # ])
+    # for p in range(len(vals[0])):
+    #     for val in vals:
+    #         val[p] *= lcm
+
+    # # 2) Make the parameters really work at search
+    # for p in range(len(vals[0])):
+    #     p_lcm = math.lcm(*[
+    #         Fraction(val[p]).denominator
+    #         for val in vals
+    #     ])
+    #     for val in vals:
+    #         val[p] *= p_lcm
+    # print("Multiplied vals", vals)
+
     result = val_constraints(vals)
+
+    # result *= result.denominator
+
     log and print("result: ", result)
     log and print()
 
