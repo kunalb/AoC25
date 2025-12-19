@@ -150,7 +150,6 @@ def solve_val_constraints(vals, total_val, params=None):
         return total
 
     # Repeatedly check limits and update bounds
-    # Someting is looping in the limits
     limits = reduce_limits(vals, params)
 
     for k, limit in enumerate(limits):
@@ -222,7 +221,7 @@ def matrix_solve(machine):
 
     idx, (joltage, combos) = machine
     log and print(machine)
-    print(f"START {idx}", flush=True)
+    log and print(f"START {idx}", flush=True)
 
     matrix = [[] for _ in joltage]
 
@@ -252,7 +251,7 @@ def matrix_solve(machine):
         log and print(sum(vals))
 
         dur_s = time.time() - start_time_s
-        print(f"DONE {idx} ({dur_s})", flush=True)
+        log and print(f"DONE {idx} ({dur_s})", flush=True)
         return sum(vals)
 
     dims = (variables - constraints + 1)
@@ -278,176 +277,16 @@ def matrix_solve(machine):
             for m in range(dims):
                  vals[col][m] -= matrix[k][l] * vals[l][m]
 
-    # TODO: Introduce constraint that values must be an integer and express that correctly
-    # 1) Find LCM of all the constant values and multiply throughout
-    # lcm = math.lcm(*[
-    #    Fraction(val[-1]).denominator
-    #    for val in vals
-    # ])
-    # for p in range(len(vals[0])):
-    #     for val in vals:
-    #         val[p] *= lcm
-
-    # 2) Make the parameters really work at search
-    # for p in range(len(vals[0]) - 1):
-    #     p_lcm = math.lcm(*[
-    #         Fraction(val[p]).denominator
-    #         for val in vals
-    #     ])
-    #     for val in vals:
-    #         val[p] *= p_lcm
-    # log and print("Multiplied vals", vals)
-
     result = val_constraints(vals)
 
     log and print("result: ", result)
     log and print()
 
     dur_s = time.time() - start_time_s
-    print(f"DONE {idx} ({dur_s})", flush=True)
+    log and print(f"DONE {idx} ({dur_s})", flush=True)
     return result
 
 ###
-
-executor2 = ThreadPoolExecutor()
-
-
-def resolve(idx, combos, joltage, fixed = None, indent=""):
-    if not fixed:
-        fixed = [None] * len(combos)
-    else:
-        fixed = list(fixed)
-
-    lowers = list(fixed)
-    uppers = list(fixed)
-
-    target_joltage = [
-        j - sum(
-            f for c, f in zip(combos, fixed)
-            if f is not None and i < len(c) and c[i] == 1
-        )
-        for (i, j) in enumerate(joltage)
-    ]
-    if any(x < 0 for x in target_joltage):
-        return -1
-
-    changed = True
-    while changed:
-        changed = False
-        for i, j in enumerate(target_joltage):
-            for k, c in enumerate(combos):
-                if i >= len(c) or c[i] != 1:
-                    continue
-
-                min_other = sum(
-                    l for (m,(l, c)) in enumerate(zip(lowers, combos))
-                    if m != k and lowers[m] is not None and
-                    i < len(c) and c[i] == 1
-                )
-
-                r = joltage[i] - min_other
-                if r < 0:
-                    return None
-
-                if uppers[k] is None or uppers[k] > r:
-                    changed = True
-                    uppers[k] = r
-
-        for i, j in enumerate(target_joltage):
-            for k, c in enumerate(combos):
-                if i >= len(c) or c[i] != 1:
-                    continue
-
-                max_other = sum(
-                    u for (l,(u, c)) in enumerate(zip(uppers, combos))
-                    if l != k and i < len(c) and c[i] == 1
-                )
-                if (r := joltage[i] - max_other) > 0:
-                    if r > uppers[k]:
-                        return None
-
-                    if lowers[k] is None or lowers[k] < r:
-                        changed = True
-                        lowers[k] = r
-                elif lowers[k] is None:
-                    changed = True
-                    lowers[k] = 0
-
-    if False and all(x is None for x in fixed):
-        print(",".join(map(
-            lambda x: f"{x[0]}-{x[1]}",
-            zip(lowers, uppers),
-        )))
-
-    next_target = None
-    for i, (l, u) in enumerate(zip(lowers, uppers)):
-        if l == u:
-            fixed[i] = l
-        else:
-            attractiveness = (len(combos[i]), l - u)
-            if next_target is None or (
-                attractiveness > next_target[1]
-            ):
-                next_target = (i, attractiveness)
-
-    if next_target is None:
-        for i, j in enumerate(joltage):
-            if j != sum(
-                f for f, c in zip(fixed, combos)
-                if i < len(c) and c[i] == 1
-            ):
-                return None
-        ## print(indent, ">", ",".join(map(str, fixed)))
-        return sum(fixed)
-    i = next_target[0]
-
-    min_sum = None
-
-    # pt = sum(1 for x in fixed if x is not None)
-    # print(f"{idx}/{pt}/{len(fixed)}: {lowers[i]} -> {uppers[i]}")
-
-    for v in range(lowers[i], uppers[i] + 1):
-        fixed[i] = v
-        # print("Fix", i, v, lowers[i], uppers[i], fixed)
-        result = resolve(idx, combos, joltage, fixed, indent + "  ")
-        # print(indent, f"resolve({','.join(map(lambda x: '_' if x is None else str(x), fixed))}) = {result}")
-        if result is None:
-            continue
-        if result < 0:
-            break
-        if min_sum is None or result < min_sum:
-            min_sum = result
-
-    return min_sum
-
-
-def solver(machine):
-    idx, (joltage, combos) = machine
-    # print(joltage)
-    # for combo in combos:
-    #     print(combo)
-
-    result = resolve(idx, combos=combos, joltage=joltage)
-    print(idx, end=" ", flush=True, file=sys.stderr)
-    return result
-
-
-def solve3(machine):
-    import numpy as np
-    idx, (joltage, combos) = machine
-
-    coeffs = []
-    for i in range(len(joltage)):
-        coeffs.append(
-            [combo[i] if len(combo) > i else 0
-            for combo in combos]
-        )
-
-    result = np.linalg.solve(
-        np.array(coeffs),
-        np.array(joltage)
-    )
-    return sum(result)
 
 
 def make_tuple(combo):
@@ -456,12 +295,6 @@ def make_tuple(combo):
         result[x] += 1
     return tuple(result)
 
-
-def dist2(joltage, curr):
-    return any(map(lambda x: x[0] < x[1], zip(joltage, curr)))
-
-def dist3(joltage, curr):
-    return sum(map(lambda x: x[0] - x[1], zip(joltage, curr)))
 
 def make_number(elems):
     num = 0
@@ -504,35 +337,6 @@ def solve(machine):
     1/0
 
 
-def solve2(machine):
-    idx, (joltage, combos) = machine
-    # print(joltage, combos)
-
-    steps = 0
-    root = 0
-    visited = set()
-    fringe = {tuple(([0] * len(joltage))): 0}
-    costs = {}
-
-    while True:
-    # for i in range(10):
-        start_node = min(fringe.items(), key=lambda x: x[1] + dist3(joltage, x[0]))
-        fringe.pop(start_node[0])
-        visited.add(start_node[0])
-        if start_node[0] == joltage:
-            # print(idx, state, combos, start_node)
-            return start_node[1]
-
-        for combo in combos:
-            next_node = tuple(map(sum, zip_longest(start_node[0], combo, fillvalue=0)))
-            if dist2(joltage, next_node):
-                continue
-
-            if next_node not in fringe and next_node not in visited:
-                fringe[next_node] = start_node[1] + 1
-
-    1/0
-
 def main():
     machines = []
     machines2 = []
@@ -556,10 +360,9 @@ def main():
         machines2.append(machine2)
 
     with ThreadPoolExecutor() as executor:
-        # total = sum(executor.map(solve, enumerate(machines)))
-        # print(total)
+        total = sum(executor.map(solve, enumerate(machines)))
+        print(total)
 
-        # total2 = sum(executor.map(solver, enumerate(machines2)))
         total2 = sum(map(matrix_solve, enumerate(machines2)))
         print(total2)
 
