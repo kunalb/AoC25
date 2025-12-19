@@ -74,7 +74,7 @@ def reduce_matrix(mat):
 
 
 def reduce_limits(vals, params):
-    log = True
+    log = False
 
     limit_updated = True
     limits = [
@@ -107,22 +107,20 @@ def reduce_limits(vals, params):
                 gtsum = sorted([g / val[i] for g in gtsum])
                 if val[i] > 0:
                     if limits[i][0] < gtsum[0]:
-                        limits[i][0] = gtsum[0]
+                        limits[i][0] = math.ceil(gtsum[0])
                         limit_updated = True
                 else:
                     if limits[i][1] > gtsum[1]:
-                        limits[i][1] = gtsum[1]
+                        limits[i][1] = math.floor(gtsum[1])
                         limit_updated = True
 
                 log and print("limits", limits)
 
         all_set = True
         for limit in limits:
-            if any(l is None for l in limit):
+            if any(l is math.inf for l in limit):
                 all_set = False
                 break
-        if all_set:
-            break
 
     log and print("final limits", limits)
     return limits
@@ -130,66 +128,83 @@ def reduce_limits(vals, params):
 
 def solve_val_constraints(vals, total_val, params=None):
     dims = len(vals[0])
-    log = True
+    log = False
     checks = []
 
     log and print("params", params, all(p is not None for p in params) if params else None)
     if params is None:
         params = [None] * (dims -1)
+    else:
+        params = list(params)
 
     if all(p is not None for p in params):
         lcm = 1
+        total = 0
         for val in vals:
             v = val[-1] + sum(a * b for (a, b) in zip(params, val))
             log and print("val check", v, val)
             assert v >= 0, f"val check failed {val}"
+            assert Fraction(v).denominator == 1, f"All vals must be integers {v}"
+            total += v
 
-        # 2025-12-17 Added an assert here
-        total = (total_val[-1] + sum(a * b for (a, b) in zip (params, total_val)))
-        assert Fraction(total).denominator == 1, "need an integer total"
         return total
 
     # Repeatedly check limits and update bounds
+    # Someting is looping in the limits
     limits = reduce_limits(vals, params)
 
-    for limit in limits:
+    for k, limit in enumerate(limits):
         if limit[1] is not None and limit[0] > limit[1]:
             assert False, "Impossible limits found"
 
-    log and print("limits", limits)
+    log and print()
+    log and print("limits", limits, params)
     explore = min(
         filter(lambda x: params[x[0]] is None, enumerate(limits)),
         key=lambda x: (x[1][1] or math.inf) - x[1][0]
     )
+    log and print(f"Walking limit: {explore}")
 
-    increment = Fraction(1, math.lcm(*[Fraction(g).denominator for g in explore[1]]))
-    print("increment", increment)
+    increment = Fraction(1, math.lcm(*[
+        Fraction(g).denominator for g in explore[1] if g is not math.inf and g is not -math.inf
+    ]))
+    log and print("increment", increment)
+
+    min_total = None
 
     if total_val[explore[0]] >= 0:
         guess = explore[1][0]
-
-        while explore[1][1] is None or guess <= explore[1][1]:
+        unbounded = explore[1][1] is math.inf
+        while (min_total is None and unbounded) or (not unbounded and guess <= explore[1][1]):
             params[explore[0]] = guess
             try:
-                return solve_val_constraints(vals, total_val, params)
+                result = solve_val_constraints(vals, total_val, params)
+                if min_total is None or min_total > result:
+                    min_total = result
             except Exception as e:
                 log and print(e)
             guess += increment
     else:
+        assert explore[1][1] is not math.inf, "Starting from an infinite limit"
+        unbounded = explore[1][0] is -math.inf
         guess = explore[1][1]
-        while guess >= explore[1][0]:
+        while (min_total is None and unbounded) or (not unbounded and guess >= explore[1][0]):
             params[explore[0]] = guess
             try:
-                return solve_val_constraints(vals, total_val, params)
+                result = solve_val_constraints(vals, total_val, params)
+                if min_total is None or min_total > result:
+                    min_total = result
             except Exception as e:
                 log and print(e)
             guess -= increment
 
+    if min_total is not None:
+        return min_total
     assert False, "No guess worked"
 
 
 def val_constraints(vals):
-    log = True
+    log = False
 
     dims = len(vals[0])
     log and pm(vals, "vals")
@@ -202,7 +217,7 @@ def val_constraints(vals):
 
 
 def matrix_solve(machine):
-    log = True
+    log = False
     start_time_s = time.time()
 
     idx, (joltage, combos) = machine
@@ -236,6 +251,8 @@ def matrix_solve(machine):
         log and print(",".join(map(str, vals)))
         log and print(sum(vals))
 
+        dur_s = time.time() - start_time_s
+        print(f"DONE {idx} ({dur_s})", flush=True)
         return sum(vals)
 
     dims = (variables - constraints + 1)
@@ -271,19 +288,17 @@ def matrix_solve(machine):
     #     for val in vals:
     #         val[p] *= lcm
 
-    # # 2) Make the parameters really work at search
-    # for p in range(len(vals[0])):
+    # 2) Make the parameters really work at search
+    # for p in range(len(vals[0]) - 1):
     #     p_lcm = math.lcm(*[
     #         Fraction(val[p]).denominator
     #         for val in vals
     #     ])
     #     for val in vals:
     #         val[p] *= p_lcm
-    # print("Multiplied vals", vals)
+    # log and print("Multiplied vals", vals)
 
     result = val_constraints(vals)
-
-    # result *= result.denominator
 
     log and print("result: ", result)
     log and print()
