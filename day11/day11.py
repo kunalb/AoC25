@@ -46,9 +46,9 @@ def inv_paths(invs, to):
     return paths
 
 
-def main2():
+def part2(rows):
     invs = defaultdict(set)
-    for row in sys.stdin:
+    for row in rows:
         begin, ends = row.split(":")
         ends = ends.strip().split()
         for end in ends:
@@ -71,13 +71,12 @@ def main2():
     )
 
 
-def main():
+def part1(rows):
     conns = {}
 
-    for row in sys.stdin:
+    for row in rows:
         begin, ends = row.split(":")
         conns[begin] = ends.strip().split()
-
 
     paths = 0
     visited = set()
@@ -100,4 +99,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main2()
+    rows = list(sys.stdin.readlines())
+    part1(rows)
+    part2(rows)
