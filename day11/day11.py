@@ -2,7 +2,36 @@ import sys
 
 from collections import deque, defaultdict
 
-# too low: 565285001952
+
+def toposort(invs):
+    visited = set()
+    toposorted = []
+
+    for k in invs:
+        if k in visited:
+            continue
+
+        st = [k]
+        visited.add(k)
+
+        while st:
+            cur = st[-1]
+            unvisited = True
+
+            for a in invs.get(cur, []):
+                if a in visited:
+                    continue
+
+                unvisited = False
+                visited.add(a)
+                st.append(a)
+                break
+
+            if unvisited:
+                toposorted.append(st.pop())
+
+    toposorted.reverse()
+    return toposorted
 
 
 def inv_paths(invs, to):
@@ -12,36 +41,17 @@ def inv_paths(invs, to):
     paths = defaultdict(lambda: 0)
     paths[to] = 1
 
-    outcount = defaultdict(lambda: 0)
-    outcount[to] = 0
-
     popped = set()
+    nextq = []
 
-    while q:
-        choice = None
-        for i, x in enumerate(q):
-            if all(
-                x not in invs[y]
-                for y in q
-                if x != y
-            ):
-                choice = (i, x)
-                break
-
-        top = choice[1]
-        q.pop(choice[0])
-
+    elems = toposort(invs)
+    for top in elems:
         wt = paths[top]
         popped.add(top)
 
-        if top in invs:
-            to_add = []
-            for c in invs[top]:
-                if c not in paths:
-                    q.append(c)
-                paths[c] += wt
-
-                assert c not in popped, c
+        for c in invs.get(top, []):
+            paths[c] += wt
+            assert c not in popped, c
 
     return paths
 
